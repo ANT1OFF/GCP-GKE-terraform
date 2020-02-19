@@ -118,7 +118,7 @@ resource "kubernetes_service" "hello-world" {
   }
   spec {
     selector = {
-      app = "${kubernetes_deployment.hello.spec.0.template.0.metadata[0].labels.App}"
+      App = "${kubernetes_deployment.hello.spec[0].template[0].metadata[0].labels.App}"
     }
     session_affinity = "ClientIP"
     port {
