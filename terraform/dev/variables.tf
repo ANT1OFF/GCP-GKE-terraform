@@ -36,11 +36,6 @@ variable "subnet_name" {
   default = "vpc-subnet"
 }
 
-# variable "subnet_iprange" {
-#   type = string
-#   default = "10.10.10.0/24"
-# }
-
 variable "ip_range_sub" {
   type = string
   default = "10.10.10.0/24"
