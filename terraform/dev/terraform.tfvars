@@ -1,0 +1,5 @@
+project_name = "bachelor-2020"
+region = "europe-west1"
+zone = "europe-west1-b"
+pool_name = "tf-node-pool"
+cluster_name = "tf-gke-cluster"
