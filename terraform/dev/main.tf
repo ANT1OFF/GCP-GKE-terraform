@@ -1,6 +1,4 @@
 terraform {
-  # The modules used in this example have been updated with 0.12 syntax, additionally we depend on a bug fixed in
-  # version 0.12.20.
   required_version = ">= 0.12.20"
 }
 
@@ -33,10 +31,10 @@ data "google_client_config" "default" {
 }
 
 
-
 # ---------------------------------------------------------------------------------------------------------------------
 # CREATE A NETWORK TO DEPLOY THE CLUSTER TO
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 module "vpc" {
   source  = "terraform-google-modules/network/google"
@@ -65,6 +63,21 @@ module "vpc" {
     }
 }
 
+
+module "service_accounts" {
+  source        = "terraform-google-modules/service-accounts/google"
+  project_id    = var.project_id
+  prefix        = "tf"
+  names         = ["gke-np-1-service-account"]
+  project_roles = ["${var.project_id}=>roles/storage.objectViewer"]
+}
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CREATE THE CLUSTER
+# ---------------------------------------------------------------------------------------------------------------------
+
+
 module "kubernetes-engine" {
   source  = "terraform-google-modules/kubernetes-engine/google"
   version = "7.2.0"
@@ -78,49 +91,77 @@ module "kubernetes-engine" {
 
   ip_range_pods          = "sub-02-secondary-01-pods"
   ip_range_services      = "sub-02-secondary-02-services"
-  create_service_account = true
 
-
+  node_pools = [
+    {
+      name               = "default-node-pool"
+      machine_type       = "n1-standard-2"
+      min_count          = 1
+      max_count          = 100
+      image_type         = "COS"
+      auto_repair        = true
+      auto_upgrade       = true
+      service_account    = module.service_accounts.email
+    },
+  ]
 }
 
-resource "kubernetes_pod" "nginx-example" {
+
+# ---------------------------------------------------------------------------------------------------------------------
+# CREATE RECURCES IN THE CLUSTER
+# ---------------------------------------------------------------------------------------------------------------------
+
+
+resource "kubernetes_service" "hello-world" {
   metadata {
-    name = "nginx-example"
-
-    labels = {
-      maintained_by = "terraform"
-      app           = "nginx-example"
-    }
+    name = "terraform-hello-world"
   }
-
-  spec {
-    container {
-      image = "nginx:1.7.9"
-      name  = "nginx-example"
-    }
-  }
-  depends_on = [module.kubernetes-engine, module.vpc]
-}
-
-resource "kubernetes_service" "nginx-example" {
-  metadata {
-    name = "terraform-example"
-  }
-
   spec {
     selector = {
-      app = kubernetes_pod.nginx-example.metadata[0].labels.app
+      app = "${kubernetes_deployment.hello.spec.0.template.0.metadata[0].labels.App}"
     }
-
     session_affinity = "ClientIP"
-
     port {
-      port        = 8080
-      target_port = 80
+      port        = 80
+      target_port = 8080
     }
 
     type = "LoadBalancer"
   }
+}
 
-  depends_on = [module.kubernetes-engine]
+resource "kubernetes_deployment" "hello" {
+  metadata {
+    name = "terraform-hello"
+    labels = {
+      App = "hello"
+    }
+  }
+
+  spec {
+    replicas = 6
+    selector {
+      match_labels = {
+        App = "hello"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          App = "hello"
+        }
+      }
+
+      spec {
+        container {
+          image = "gcr.io/bachelor-2020/hello-world@sha256:52cd3259e461429ea5123623503920622fad5deb57f44e14167447d1cb1c777b"
+          name  = "hello"
+          port {
+            container_port = 8080
+          }
+        }
+      }
+    }
+  }
 }
